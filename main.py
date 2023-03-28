@@ -1,28 +1,27 @@
-import time
-start_time = time.time()
-print(start_time)
-
-import warnings
-from astropy.utils.exceptions import AstropyDeprecationWarning
-
-from hrvanalysis import (
-    get_frequency_domain_features,
-    get_poincare_plot_features
+from utils.utils import (
+    create_time_intervals,
+    extract_name_date,
+    check_file_exists,
+    convert_posix_time_to_date,
 )
-import numpy as np
-import pandas as pd
 
-from os_functions.get_csv_directories_and_files import get_csv_files
-from find_peaks.peaks_extraction_scaling import find_peaks_and_scale
 from hrv_algorithms.hrv_algorithms import (
     calculate_si,
     process_rr_nn_intervals
 )
-from utils.utils import (
-    create_time_intervals,
-    extract_name_date,
-    check_file_exists
+from find_peaks.peaks_extraction_scaling import find_peaks_and_scale
+from os_functions.get_csv_directories_and_files import get_csv_files
+import pandas as pd
+import numpy as np
+from hrvanalysis import (
+    get_frequency_domain_features,
+    get_poincare_plot_features
 )
+from astropy.utils.exceptions import AstropyDeprecationWarning
+import math
+import time
+import warnings
+
 
 
 pd.options.display.float_format = '{:20,.2f}'.format
@@ -45,6 +44,7 @@ vlf_list = []
 total_power_list = []
 si_sleep = []
 sd_list = []
+date_time_list = []
 
 csv_files = get_csv_files()
 # print(csv_files)
@@ -87,11 +87,11 @@ for file in files_sorted:
         si_df_interpolated_nn_intervals = process_rr_nn_intervals(si_np)
 
         if si_df_interpolated_nn_intervals == 0:
-            si_values.append(0)
-            time_list.append(hrv_range[n+1])
-            lf_hf_list.append(0)
-            # vlf_list.append(0)
-            # total_power_list.append(0)
+            # si_values.append(0)
+            # time_list.append(hrv_range[n+1])
+            # lf_hf_list.append(0)
+            # date_time_list.append(convert_posix_time_to_date(hrv_range[n+1]))
+
             continue
 
         si = calculate_si(si_df_interpolated_nn_intervals)
@@ -106,17 +106,18 @@ for file in files_sorted:
         si_values.append(si)
         time_list.append(hrv_range[n+1])
         lf_hf_list.append(freq_measures['lf_hf_ratio'])
+        date_time_list.append(convert_posix_time_to_date(hrv_range[n+1]))
 
     si_values_np = np.array(si_values)
     si_diff_np = np.diff(si_values_np)
     time_values_np = np.array(time_list)
     time_diff_np = np.diff(time_values_np)
-    si_diff = si_diff_np/time_diff_np
+    si_diff = (si_diff_np/time_diff_np)*1000*60
     si_diff = np.insert(si_diff, 0, 0)
 
     # print(len(si_values), len(lf_hf_list), len(si_diff), len(time_list))
     metrics_dict = {'si_values': si_values, 'lf_hf_list': lf_hf_list,
-                    'si_diff': si_diff, 'timestamp': time_list}
+                    'si_diff_per_min': si_diff, 'timestamp': time_list, 'datetime': date_time_list}
     try:
         # If the DataFrame exists, append the dictionary to it
         metrics_5min_df = pd.concat(
@@ -130,13 +131,13 @@ for file in files_sorted:
     si_np = si_np*1000
     si_df_interpolated_nn_intervals = process_rr_nn_intervals(si_np)
     if si_df_interpolated_nn_intervals == 0:
-        si_sleep.append(0)
-        # time_list.append(hrv_range[n+1])
-        vlf_list.append(0)
-        total_power_list.append(0)
-        sd_list[0].append(0)
-        sd_list[1].append(0)
-        sd_list[2].append(0)
+        # si_sleep.append(0)
+        # # time_list.append(hrv_range[n+1])
+        # vlf_list.append(0)
+        # total_power_list.append(0)
+        # sd_list[0].append(0)
+        # sd_list[1].append(0)
+        # sd_list[2].append(0)
         continue
     sd_info = get_poincare_plot_features(si_df_interpolated_nn_intervals)
     if 'sd1' not in sd_info:
@@ -156,30 +157,30 @@ for file in files_sorted:
     # freq_measures = get_frequency_domain_features(si_df_interpolated_nn_intervals, method='lomb')
 
     si_sleep.append(si)
-    vlf_list.append(freq_measures['vlf'])
-    total_power_list.append(freq_measures['total_power'])
-    
+    vlf_list.append(math.log(freq_measures['vlf']))
+    total_power_list.append(math.log(freq_measures['total_power']))
+
     sd_list[0].append(sd_info['sd1'])
     sd_list[1].append(sd_info['sd2'])
     sd_list[2].append(sd_info['ratio_sd2_sd1'])
-    print(sd_list)
+    #print(sd_list)
 
     try:
-        vlf_percent = vlf_list[0]/total_power_list[0]
+        vlf_percent = freq_measures['vlf']/freq_measures['total_power']
     except ZeroDivisionError:
         vlf_percent = 0
 
     daily_metrics_dict = {
-        'si_values': si_sleep, 
+        'si_values': si_sleep,
         'vlf_list': vlf_list,
-        'total_power': total_power_list, 
-        'vlf/tp': vlf_percent, 
-        'sd1': sd_list[0], 
-        'sd2': sd_list[1], 
-        'sd_ratio': sd_list[2], 
+        'total_power': total_power_list,
+        'vlf/tp': vlf_percent,
+        'sd1': sd_list[0],
+        'sd2': sd_list[1],
+        'sd_ratio': sd_list[2],
         'date': current_date
-        }
-    
+    }
+
     try:
         # If the DataFrame exists, append the dictionary to it
         metrics_daily_df = pd.concat(
@@ -189,12 +190,6 @@ for file in files_sorted:
         metrics_daily_df = pd.DataFrame.from_dict(daily_metrics_dict)
 
 
-# print(len(metrics_5min_df))
-# print(len(metrics_daily_df))
 metrics_daily_df.to_csv(filename_daily, index=False)
 metrics_5min_df.to_csv(filename_5min_window, index=False)
 
-end_time = time.time()
-print(end_time)
-
-print(f"Time taken: {end_time - start_time:.5f} seconds")

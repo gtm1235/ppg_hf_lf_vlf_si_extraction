@@ -47,3 +47,9 @@ def check_file_exists(filename):
         # Create file
         with open(filename, 'w') as file:
             print(f"File '{filename}' created.")
+
+def convert_posix_time_to_date(posix_time):
+    """Converts posix time to date"""
+    date = pd.to_datetime(posix_time, unit='ms')
+    date = date.strftime('%Y-%m-%d %H:%M:%S')
+    return date
