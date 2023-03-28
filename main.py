@@ -27,9 +27,9 @@ warnings.simplefilter('ignore', category=RuntimeWarning)
 NUM_MINUTES_WINDOW = [5, 15]
 
 si_values = []
-time_list = []
-lf_hf_list = []
-date_time_list = []
+timestamps = []
+lf_hf = []
+date_timestamps = []
 metrics_5min_df = None
 metrics_15min_df = None
 metrics_daily_df = None
@@ -61,9 +61,9 @@ for file in files_sorted:
         si_sleep = []
         sd_list = [[], [], []]
         si_values = []
-        time_list = []
-        lf_hf_list = []
-        date_time_list = []
+        timestamps = []
+        lf_hf = []
+        date_timestamps = []
 
         data = pd.read_csv(file)
 
@@ -89,16 +89,16 @@ for file in files_sorted:
                 freq_measures = get_frequency_domain_features(
                     si_df_interpolated_nn_intervals, method='lomb')
             except:
-                lf_hf_list.append(0)
+                lf_hf.append(0)
 
             si_values.append(si)
-            time_list.append(hrv_range[n+1])
-            lf_hf_list.append(freq_measures['lf_hf_ratio'])
-            date_time_list.append(convert_posix_time_to_date(hrv_range[n+1]))
+            timestamps.append(hrv_range[n+1])
+            lf_hf.append(freq_measures['lf_hf_ratio'])
+            date_timestamps.append(convert_posix_time_to_date(hrv_range[n+1]))
 
         si_values_np = np.array(si_values)
         si_diff_np = np.diff(si_values_np)
-        time_values_np = np.array(time_list)
+        time_values_np = np.array(timestamps)
         time_diff_np = np.diff(time_values_np)
         si_diff = ((si_diff_np*1000*60)/time_diff_np)
 
@@ -107,7 +107,7 @@ for file in files_sorted:
                 si_diff = np.insert(si_diff, 0, 0)
             else:
                 temp_si_df = ((si_values[0] - metrics_5min_df['si_diff_per_min'].iloc[-1])*60*1000)/(
-                    time_list[0]-metrics_5min_df['timestamp'].iloc[-1])
+                    timestamps[0]-metrics_5min_df['timestamp'].iloc[-1])
                 si_diff = np.insert(si_diff, 0, temp_si_df)
 
         elif minutes_window == 15:
@@ -115,11 +115,11 @@ for file in files_sorted:
                 si_diff = np.insert(si_diff, 0, 0)
             else:
                 temp_si_df = ((si_values[0] - metrics_15min_df['si_diff_per_min'].iloc[-1])*60*1000)/(
-                    time_list[0]-metrics_15min_df['timestamp'].iloc[-1])
+                    timestamps[0]-metrics_15min_df['timestamp'].iloc[-1])
                 si_diff = np.insert(si_diff, 0, temp_si_df)
 
-        metrics_dict = {'si_values': si_values, 'lf_hf_list': lf_hf_list,
-                        'si_diff_per_min': si_diff, 'timestamp': time_list, 'datetime': date_time_list}
+        metrics_dict = {'si_values': si_values, 'lf_hf': lf_hf,
+                        'si_diff_per_min': si_diff, 'timestamp': timestamps, 'datetime': date_timestamps}
 
         if minutes_window == 5:
 
@@ -189,10 +189,10 @@ for file in files_sorted:
 
     if metrics_daily_df is None:
         # If the DataFrame doesn't exist, create it and assign it the dictionary
-        metrics_daily_df = pd.DataFrame.from_dict(metrics_dict)
+        metrics_daily_df = pd.DataFrame.from_dict(daily_metrics_dict)
     else:
         metrics_daily_df = pd.concat(
-            [metrics_daily_df, pd.DataFrame.from_dict(metrics_dict)])
+            [metrics_daily_df, pd.DataFrame.from_dict(daily_metrics_dict)])
 
 
 metrics_daily_df.to_csv(filename_daily, index=False)
