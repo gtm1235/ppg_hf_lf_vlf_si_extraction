@@ -1,28 +1,19 @@
-from utils.utils import (
-    create_time_intervals,
-    extract_name_date,
-    check_file_exists,
-    convert_posix_time_to_date,
-)
-
-from hrv_algorithms.hrv_algorithms import (
-    calculate_si,
-    process_rr_nn_intervals
-)
-from find_peaks.peaks_extraction_scaling import find_peaks_and_scale
-from os_functions.get_csv_directories_and_files import get_csv_files
-import pandas as pd
-import numpy as np
-from hrvanalysis import (
-    get_frequency_domain_features,
-    get_poincare_plot_features
-)
-from astropy.utils.exceptions import AstropyDeprecationWarning
 import math
-import time
 import warnings
 
+import numpy as np
+import pandas as pd
+from astropy.utils.exceptions import AstropyDeprecationWarning
+from hrvanalysis import (get_frequency_domain_features,
+                         get_poincare_plot_features)
 
+from find_peaks.peaks_extraction_scaling import find_peaks_and_scale
+from hrv_algorithms.hrv_algorithms import calculate_si, process_rr_nn_intervals
+from os_functions.get_csv_directories_and_files import get_csv_files
+from utils.utils import (check_file_exists, convert_posix_time_to_date,
+                         create_time_intervals, extract_name_date)
+
+# Set pandas and numpy floatdisplay options to supress scientific notation
 pd.options.display.float_format = '{:20,.2f}'.format
 np.set_printoptions(suppress=True, formatter={'float_kind': '{:0}'.format})
 
@@ -32,7 +23,6 @@ warnings.simplefilter('ignore', category=AstropyDeprecationWarning)
 warnings.simplefilter('ignore', category=FutureWarning)
 warnings.simplefilter('ignore', category=RuntimeWarning)
 
-
 # set number of minutes for sliding window in calculation for SI, HF/LF, VLF, Poincare
 NUM_MINUTES_WINDOW = [5, 15]
 
@@ -40,32 +30,25 @@ si_values = []
 time_list = []
 lf_hf_list = []
 date_time_list = []
-# vlf_list = []
-# total_power_list = []
-# si_sleep = []
-# sd_list = []
 metrics_5min_df = None
 metrics_15min_df = None
 metrics_daily_df = None
 
 csv_files = get_csv_files()
-# print(csv_files)
 
 # extarct information from filename
 name, first_date, last_date, files_sorted = extract_name_date(csv_files)
 
-
 # file for range of dates for daily metrics
 filename_daily = f'{name}_{first_date}_to_{last_date}_daily.csv'
 check_file_exists(filename_daily)
-# file for range of dates for daily metrics
+# file for range of dates for 5 min metrics
 filename_5min_window = f'{name}_{first_date}_to_{last_date}_5min.csv'
 check_file_exists(filename_5min_window)
-
+# file for range of dates for 15 min metrics
 filename_15min_window = f'{name}_{first_date}_to_{last_date}_15min.csv'
 check_file_exists(filename_15min_window)
 
-# print(files_sorted)
 for file in files_sorted:
     current_date = file[2]
     current_date = current_date[:4] + '-' + \
@@ -99,10 +82,6 @@ for file in files_sorted:
             si_df_interpolated_nn_intervals = process_rr_nn_intervals(si_np)
 
             if si_df_interpolated_nn_intervals == 0:
-                # si_values.append(0)
-                # time_list.append(hrv_range[n+1])
-                # lf_hf_list.append(0)
-                # date_time_list.append(convert_posix_time_to_date(hrv_range[n+1]))
                 continue
 
             si = calculate_si(si_df_interpolated_nn_intervals)
@@ -127,35 +106,22 @@ for file in files_sorted:
             if metrics_5min_df is None:
                 si_diff = np.insert(si_diff, 0, 0)
             else:
-                temp_si_df = ((si_values[0] - metrics_5min_df['si_diff_per_min'].iloc[-1])*60*1000)/(time_list[0]-metrics_5min_df['timestamp'].iloc[-1])
+                temp_si_df = ((si_values[0] - metrics_5min_df['si_diff_per_min'].iloc[-1])*60*1000)/(
+                    time_list[0]-metrics_5min_df['timestamp'].iloc[-1])
                 si_diff = np.insert(si_diff, 0, temp_si_df)
 
         elif minutes_window == 15:
             if metrics_15min_df is None:
                 si_diff = np.insert(si_diff, 0, 0)
             else:
-                temp_si_df = ((si_values[0] - metrics_15min_df['si_diff_per_min'].iloc[-1])*60*1000)/(time_list[0]-metrics_15min_df['timestamp'].iloc[-1])
+                temp_si_df = ((si_values[0] - metrics_15min_df['si_diff_per_min'].iloc[-1])*60*1000)/(
+                    time_list[0]-metrics_15min_df['timestamp'].iloc[-1])
                 si_diff = np.insert(si_diff, 0, temp_si_df)
 
         metrics_dict = {'si_values': si_values, 'lf_hf_list': lf_hf_list,
                         'si_diff_per_min': si_diff, 'timestamp': time_list, 'datetime': date_time_list}
-        
+
         if minutes_window == 5:
-        #     try:
-        #         # If the DataFrame exists, append the dictionary to it
-        #         metrics_5min_df = pd.concat(
-        #             [metrics_5min_df, pd.DataFrame.from_dict(metrics_dict)])
-        #     except NameError:
-        #         # If the DataFrame doesn't exist, create it and assign it the dictionary
-        #         metrics_5min_df = pd.DataFrame.from_dict(metrics_dict)
-        # elif minutes_window == 15:
-        #     try:
-        #         # If the DataFrame exists, append the dictionary to it
-        #         metrics_15min_df = pd.concat(
-        #             [metrics_15min_df, pd.DataFrame.from_dict(metrics_dict)])
-        #     except NameError:
-        #         # If the DataFrame doesn't exist, create it and assign it the dictionary
-        #         metrics_15min_df = pd.DataFrame.from_dict(metrics_dict)
 
             if metrics_5min_df is None:
                 # If the DataFrame doesn't exist, create it and assign it the dictionary
@@ -176,15 +142,10 @@ for file in files_sorted:
     si_np = df_hrv['hrv'].to_numpy()
     si_np = si_np*1000
     si_df_interpolated_nn_intervals = process_rr_nn_intervals(si_np)
+
     if si_df_interpolated_nn_intervals == 0:
-        # si_sleep.append(0)
-        # # time_list.append(hrv_range[n+1])
-        # vlf_list.append(0)
-        # total_power_list.append(0)
-        # sd_list[0].append(0)
-        # sd_list[1].append(0)
-        # sd_list[2].append(0)
         continue
+
     sd_info = get_poincare_plot_features(si_df_interpolated_nn_intervals)
     if 'sd1' not in sd_info:
         sd_list[0].append(0)
@@ -194,6 +155,7 @@ for file in files_sorted:
         sd_list[2].append(0)
 
     si = calculate_si(si_df_interpolated_nn_intervals)
+
     try:
         freq_measures = get_frequency_domain_features(
             si_df_interpolated_nn_intervals, method='lomb')
@@ -208,7 +170,6 @@ for file in files_sorted:
     sd_list[0].append(sd_info['sd1'])
     sd_list[1].append(sd_info['sd2'])
     sd_list[2].append(sd_info['ratio_sd2_sd1'])
-    # print(sd_list)
 
     try:
         vlf_percent = freq_measures['vlf']/freq_measures['total_power']
@@ -226,13 +187,6 @@ for file in files_sorted:
         'date': current_date
     }
 
-    # try:
-    #     # If the DataFrame exists, append the dictionary to it
-    #     metrics_daily_df = pd.concat(
-    #         [metrics_daily_df, pd.DataFrame.from_dict(daily_metrics_dict)])
-    # except NameError:
-    #     # If the DataFrame doesn't exist, create it and assign it the dictionary
-    #     metrics_daily_df = pd.DataFrame.from_dict(daily_metrics_dict)
     if metrics_daily_df is None:
         # If the DataFrame doesn't exist, create it and assign it the dictionary
         metrics_daily_df = pd.DataFrame.from_dict(metrics_dict)
