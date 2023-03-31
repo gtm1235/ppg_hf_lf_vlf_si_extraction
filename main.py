@@ -1,3 +1,13 @@
+"""
+The HRV Analysis library is a Python package for analyzing heart rate variability (HRV) data. The library provides a wide range of tools for calculating HRV statistics, plotting HRV data, and performing time-domain, frequency-domain, and non-linear HRV analyses.
+
+The HRV Analysis library is developed and maintained by the HRV Analysis development team [1]. If you use this library in your research, please cite the following paper:
+
+[1] HRV Analysis Development Team. (2021). hrv-analysis: A Python library for heart rate variability analysis. Zenodo. https://doi.org/10.5281/zenodo.5521308
+"""
+
+# ... rest of the code ...
+
 import math
 import warnings
 
@@ -8,10 +18,18 @@ from hrvanalysis import (get_frequency_domain_features,
                          get_poincare_plot_features)
 
 from find_peaks.peaks_extraction_scaling import find_peaks_and_scale
-from hrv_algorithms.hrv_algorithms import calculate_si, process_rr_nn_intervals
-from os_functions.get_csv_directories_and_files import get_csv_files
-from utils.utils import (check_file_exists, convert_posix_time_to_date,
-                         create_time_intervals, extract_name_date)
+from hrv_algorithms.hrv_algorithms import (calculate_si,
+                                           calculate_derivative_si_time,
+                                           process_rr_nn_intervals)
+from os_functions.get_csv_directories_and_files import (get_csv_files,
+                                                        create_and_check_metric_files)
+from utils.utils import (convert_posix_time_to_date,
+                         create_time_intervals,
+                         create_hrv_window,
+                         extract_name_date,
+                         hrv_IBI_s_to_ms
+                         )
+
 
 # Set pandas and numpy floatdisplay options to supress scientific notation
 pd.options.display.float_format = '{:20,.2f}'.format
@@ -26,28 +44,22 @@ warnings.simplefilter('ignore', category=RuntimeWarning)
 # set number of minutes for sliding window in calculation for SI, HF/LF, VLF, Poincare
 NUM_MINUTES_WINDOW = [5, 15]
 
-si_values = []
-timestamps = []
-lf_hf = []
-date_timestamps = []
+# si_values = []
+# timestamps = []
+# lf_hf = []
+# date_timestamps = []
+
+# initialize pd.DataFrames for metrics
 metrics_5min_df = None
 metrics_15min_df = None
 metrics_daily_df = None
 
+# Get a list of all CSV files in the current directory, extract the name and date from each file name, and create and check
+# metric files for 5-minute, 15-minute, and daily metrics.
 csv_files = get_csv_files()
-
-# extarct information from filename
 name, first_date, last_date, files_sorted = extract_name_date(csv_files)
-
-# file for range of dates for daily metrics
-filename_daily = f'{name}_{first_date}_to_{last_date}_daily.csv'
-check_file_exists(filename_daily)
-# file for range of dates for 5 min metrics
-filename_5min_window = f'{name}_{first_date}_to_{last_date}_5min.csv'
-check_file_exists(filename_5min_window)
-# file for range of dates for 15 min metrics
-filename_15min_window = f'{name}_{first_date}_to_{last_date}_15min.csv'
-check_file_exists(filename_15min_window)
+filename_5min_window, filename_15min_window, filename_daily = create_and_check_metric_files(
+    name, first_date, last_date)
 
 for file in files_sorted:
     current_date = file[2]
@@ -73,13 +85,11 @@ for file in files_sorted:
         print(minutes_window, (hrv_range[0]-hrv_range[1])/60000)
 
         for n in range(len(hrv_range)-1):
-            # Caluclates values over window range for short term recovery
-            si_df = df_hrv.loc[df_hrv['ts'] < hrv_range[n+1]]
-            si_df = si_df.loc[si_df['ts'] > hrv_range[n]]
-            si_np = si_df['hrv'].to_numpy()
-            si_np = si_np*1000
 
-            si_df_interpolated_nn_intervals = process_rr_nn_intervals(si_np)
+            ibi_window_df = create_hrv_window(df_hrv, hrv_range, n)
+            ibi_ms = hrv_IBI_s_to_ms(ibi_window_df)
+
+            si_df_interpolated_nn_intervals = process_rr_nn_intervals(ibi_ms)
 
             if si_df_interpolated_nn_intervals == 0:
                 continue
@@ -96,30 +106,27 @@ for file in files_sorted:
             lf_hf.append(freq_measures['lf_hf_ratio'])
             date_timestamps.append(convert_posix_time_to_date(hrv_range[n+1]))
 
-        si_values_np = np.array(si_values)
-        si_diff_np = np.diff(si_values_np)
-        time_values_np = np.array(timestamps)
-        time_diff_np = np.diff(time_values_np)
-        si_diff = ((si_diff_np*1000*60)/time_diff_np)
+
+        si_derivative = calculate_derivative_si_time(si_values, timestamps)
 
         if minutes_window == 5:
             if metrics_5min_df is None:
-                si_diff = np.insert(si_diff, 0, 0)
+                si_derivative = np.insert(si_derivative, 0, 0)
             else:
                 temp_si_df = ((si_values[0] - metrics_5min_df['si_diff_per_min'].iloc[-1])*60*1000)/(
                     timestamps[0]-metrics_5min_df['timestamp'].iloc[-1])
-                si_diff = np.insert(si_diff, 0, temp_si_df)
+                si_derivative = np.insert(si_derivative, 0, temp_si_df)
 
         elif minutes_window == 15:
             if metrics_15min_df is None:
-                si_diff = np.insert(si_diff, 0, 0)
+                si_derivative = np.insert(si_derivative, 0, 0)
             else:
                 temp_si_df = ((si_values[0] - metrics_15min_df['si_diff_per_min'].iloc[-1])*60*1000)/(
                     timestamps[0]-metrics_15min_df['timestamp'].iloc[-1])
-                si_diff = np.insert(si_diff, 0, temp_si_df)
+                si_derivative = np.insert(si_derivative, 0, temp_si_df)
 
         metrics_dict = {'si_values': si_values, 'lf_hf': lf_hf,
-                        'si_diff_per_min': si_diff, 'timestamp': timestamps, 'datetime': date_timestamps}
+                        'si_diff_per_min': si_derivative, 'timestamp': timestamps, 'datetime': date_timestamps}
 
         if minutes_window == 5:
 

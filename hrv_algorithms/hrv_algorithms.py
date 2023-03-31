@@ -1,4 +1,6 @@
 import math
+from typing import List
+
 import pandas as pd
 import numpy as np
 
@@ -52,3 +54,22 @@ def process_rr_nn_intervals(si_np):
         return 0
     else:
         return si_df_interpolated_nn_intervals
+
+def calculate_derivative_si_time(si_values: List[float], timestamps: List[int]) -> np.ndarray:
+    """
+    Calculate the derivative of a signal of short-term recovery over time.
+
+    Args:
+    - si_values: A list of float values representing short-term recovery.
+    - timestamps: A list of int values representing time of measurement.
+
+    Returns:
+    - A numpy ndarray representing the derivative of the signal.
+
+    """
+    # si_values_np = np.array(si_values)
+    si_diff_np = (np.diff(np.array(si_values)))*60*1000
+    # time_values_np = np.array(timestamps)
+    time_diff_np = np.diff(np.array(timestamps))
+    si_derivative = ((si_diff_np)/time_diff_np)
+    return si_derivative
