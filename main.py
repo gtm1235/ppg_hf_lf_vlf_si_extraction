@@ -90,11 +90,10 @@ for file in files_sorted:
             ibi_ms = hrv_IBI_s_to_ms(ibi_window_df)
 
             si_df_interpolated_nn_intervals = process_rr_nn_intervals(ibi_ms)
-
             if si_df_interpolated_nn_intervals == 0:
                 continue
-
             si = calculate_si(si_df_interpolated_nn_intervals)
+            
             try:
                 freq_measures = get_frequency_domain_features(
                     si_df_interpolated_nn_intervals, method='lomb')
